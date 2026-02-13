@@ -1,0 +1,42 @@
+llm:
+  provider: "openai"  # openai, anthropic, or google
+  openai_api_key: "your-openai-api-key-here"
+  anthropic_api_key: "your-anthropic-api-key-here"
+  google_api_key: "your-google-api-key-here"
+  model:
+    openai: "gpt-4o"
+    anthropic: "claude-3-5-sonnet-20241022"
+    google: "gemini-2.0-flash-exp"
+
+database:
+  path: "albums.db"
+
+directories:
+  albums_owned: "albums_owned"
+  albums_wishlist: "albums_wishlist"
+
+settings:
+  auto_enrich: true
+  image_extensions:
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".webp"
+  predefined_genres:
+    - "pop"
+    - "rock"
+    - "jazz"
+    - "classical"
+    - "electronic"
+    - "hip-hop"
+    - "country"
+    - "folk"
+    - "metal"
+    - "blues"
+    - "r&b"
+    - "world"
+  user_categories:
+    - "80s classics"
+    - "summer playlists"
+    - "workout music"
+    - "rainy day"

@@ -1,0 +1,8 @@
+albums.db
+*.pyc
+site/
+config.yaml
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store

@@ -6,3 +6,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 .DS_Store
+venv/
+.site_state.json
+albums_owned/*.jpg
+albums_owned/*.jpeg
+albums_owned/*.png
+albums_owned/*.webp
+albums_wishlist/*.jpg
+albums_wishlist/*.jpeg
+albums_wishlist/*.png
+albums_wishlist/*.webp

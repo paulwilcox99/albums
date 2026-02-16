@@ -116,7 +116,7 @@ def get_all_albums(db_path):
 
 
 # HTML Templates
-def html_header(title, breadcrumbs=None):
+def html_header(title, breadcrumbs=None, base=None):
     """Generate HTML header."""
     bc_html = ""
     if breadcrumbs:
@@ -128,11 +128,14 @@ def html_header(title, breadcrumbs=None):
                 bc_parts.append(escape(name))
         bc_html = f'<nav class="breadcrumbs">{" → ".join(bc_parts)}</nav>'
 
+    base_tag = f'<base href="{base}">' if base else ''
+
     return f'''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {base_tag}
     <title>{escape(title)} - Album Collection</title>
     <style>
         :root {{
@@ -256,9 +259,22 @@ def html_header(title, breadcrumbs=None):
         dl {{ margin: 1.25rem 0; }}
         dt {{ color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; text-transform: uppercase; letter-spacing: 0.03em; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
         dd {{ margin-left: 0; margin-top: 0.25rem; }}
+        .back-to-collections {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 0.85rem;
+            margin-bottom: 1.5rem;
+        }}
+        .back-to-collections a {{
+            color: var(--text-muted);
+            text-decoration: none;
+        }}
+        .back-to-collections a:hover {{
+            color: var(--link);
+        }}
     </style>
 </head>
 <body>
+<div class="back-to-collections"><a href="https://pauls-collections.vercel.app">← All Collections</a></div>
 {bc_html}
 <h1>{escape(title)}</h1>
 '''
@@ -283,7 +299,7 @@ def generate_album_page(album, output_dir):
 
     artists = ", ".join(album['artists_list']) if album['artists_list'] else album['artists']
 
-    html = html_header(album['album_name'], [("Albums", "albums.html"), (album['album_name'], None)])
+    html = html_header(album['album_name'], [("Albums", "albums.html"), (album['album_name'], None)], base="../")
 
     html += '<div class="card">'
     html += f'<p class="artist">by {escape(artists)}</p>'
@@ -319,7 +335,8 @@ def generate_album_page(album, output_dir):
     if album['track_listing_list']:
         html += '<h2>Track Listing</h2><ol class="track-list">'
         for track in album['track_listing_list']:
-            html += f'<li>{escape(track)}</li>'
+            if track:
+                html += f'<li>{escape(track)}</li>'
         html += '</ol>'
 
     if album['album_review']:
@@ -381,9 +398,9 @@ def generate_list_page(title, items, output_path, breadcrumbs, intro=""):
         f.write(html)
 
 
-def generate_group_page(title, albums, output_path, breadcrumbs):
+def generate_group_page(title, albums, output_path, breadcrumbs, base=None):
     """Generate a page showing a group of albums."""
-    html = html_header(title, breadcrumbs)
+    html = html_header(title, breadcrumbs, base=base)
 
     html += f'<p style="margin-bottom: 1.5rem; color: var(--text-muted);">{len(albums)} album(s)</p>'
 
@@ -571,7 +588,7 @@ def generate_site(force=False):
     for artist, artist_albums in artists_index.items():
         slug = slugify(artist)
         filepath = os.path.join(OUTPUT_DIR, "artists", f"{slug}.html")
-        generate_group_page(artist, artist_albums, filepath, [("Artists", "artists.html"), (artist, None)])
+        generate_group_page(artist, artist_albums, filepath, [("Artists", "artists.html"), (artist, None)], base="../")
         artist_items.append((artist, f"artists/{slug}.html", len(artist_albums)))
 
     generate_list_page("Artists", artist_items,
@@ -585,7 +602,7 @@ def generate_site(force=False):
     for genre, genre_albums in genres_index.items():
         slug = slugify(genre)
         filepath = os.path.join(OUTPUT_DIR, "genres", f"{slug}.html")
-        generate_group_page(genre, genre_albums, filepath, [("Genres", "genres.html"), (genre, None)])
+        generate_group_page(genre, genre_albums, filepath, [("Genres", "genres.html"), (genre, None)], base="../")
         genre_items.append((genre, f"genres/{slug}.html", len(genre_albums)))
 
     generate_list_page("Genres", genre_items,
@@ -599,7 +616,7 @@ def generate_site(force=False):
     for year, year_albums in years_index.items():
         slug = year
         filepath = os.path.join(OUTPUT_DIR, "years", f"{slug}.html")
-        generate_group_page(year, year_albums, filepath, [("Years", "years.html"), (year, None)])
+        generate_group_page(year, year_albums, filepath, [("Years", "years.html"), (year, None)], base="../")
         year_items.append((year, f"years/{slug}.html", len(year_albums)))
 
     # Sort years in reverse chronological order
@@ -615,7 +632,7 @@ def generate_site(force=False):
     for cat, cat_albums in categories_index.items():
         slug = slugify(cat)
         filepath = os.path.join(OUTPUT_DIR, "categories", f"{slug}.html")
-        generate_group_page(cat, cat_albums, filepath, [("Categories", "categories.html"), (cat, None)])
+        generate_group_page(cat, cat_albums, filepath, [("Categories", "categories.html"), (cat, None)], base="../")
         category_items.append((cat, f"categories/{slug}.html", len(cat_albums)))
 
     generate_list_page("Categories", category_items,

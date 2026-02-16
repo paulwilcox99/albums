@@ -139,126 +139,27 @@ def html_header(title, breadcrumbs=None, base=None):
     <title>{escape(title)} - Album Collection</title>
     <style>
         :root {{
-            --bg: #faf8f5;
-            --bg-card: #ffffff;
-            --text: #2c2c2c;
-            --text-muted: #666666;
+            --bg: #ffffff;
+            --bg-card: #f8f9fa;
+            --text: #2c3e50;
+            --text-muted: #7f8c8d;
             --accent: #e91e63;
             --accent-hover: #c2185b;
-            --link: #1a4a6e;
-            --link-hover: #0d2d44;
-            --border: #d4cfc7;
-            --border-light: #e8e4dd;
+            --link: #e91e63;
+            --link-hover: #c2185b;
+            --border: #e0e0e0;
+            --border-light: #f0f0f0;
         }}
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
-            font-family: Georgia, 'Times New Roman', serif;
+            font-family: Georgia, serif;
             background: var(--bg);
             color: var(--text);
-            line-height: 1.8;
-            padding: 2.5rem;
-            max-width: 960px;
+            line-height: 1.6;
+            padding: 2rem;
+            max-width: 1200px;
             margin: 0 auto;
         }}
-        a {{ color: var(--link); text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 2px; }}
-        a:hover {{ color: var(--link-hover); text-decoration-color: var(--link-hover); }}
-        h1 {{
-            color: var(--text);
-            margin-bottom: 1.5rem;
-            font-size: 2.2rem;
-            font-weight: normal;
-            letter-spacing: -0.02em;
-            border-bottom: 2px solid var(--accent);
-            padding-bottom: 0.75rem;
-        }}
-        h2 {{
-            color: var(--text);
-            margin: 2rem 0 1rem;
-            font-size: 1.4rem;
-            font-weight: normal;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 0.5rem;
-        }}
-        h3 {{ color: var(--text); margin: 1.25rem 0 0.75rem; font-size: 1.1rem; font-weight: 600; }}
-        .breadcrumbs {{ margin-bottom: 2rem; color: var(--text-muted); font-size: 0.9rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
-        .breadcrumbs a {{ color: var(--link); }}
-        .card {{
-            background: var(--bg-card);
-            padding: 2rem;
-            margin-bottom: 1.5rem;
-            border: 1px solid var(--border-light);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        }}
-        .album-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 1.5rem;
-        }}
-        .album-card {{
-            background: var(--bg-card);
-            padding: 1.25rem;
-            border: 1px solid var(--border-light);
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }}
-        .album-card:hover {{ border-color: var(--accent); box-shadow: 0 2px 8px rgba(233,30,99,0.08); }}
-        .album-card h3 {{ margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600; }}
-        .album-card h3 a {{ text-decoration: none; }}
-        .album-card h3 a:hover {{ text-decoration: underline; }}
-        .album-card .artist {{ color: var(--text-muted); font-size: 0.95rem; font-style: italic; }}
-        .album-card .meta {{ font-size: 0.85rem; color: var(--text-muted); margin-top: 0.75rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
-        .rating {{ color: var(--accent); }}
-        .genre-badge {{
-            display: inline-block;
-            padding: 0.2rem 0.6rem;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            font-weight: 500;
-            color: white;
-            border-radius: 3px;
-        }}
-        .tag {{
-            display: inline-block;
-            background: var(--bg);
-            color: var(--text-muted);
-            padding: 0.2rem 0.6rem;
-            font-size: 0.85rem;
-            margin: 0.25rem;
-            border: 1px solid var(--border);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            text-decoration: none;
-        }}
-        .tag:hover {{ background: var(--accent); color: white; border-color: var(--accent); text-decoration: none; }}
-        .track-list {{
-            list-style-position: inside;
-            margin: 0.5rem 0;
-            line-height: 1.6;
-        }}
-        .track-list li {{ margin: 0.25rem 0; }}
-        .nav-sections {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2.5rem;
-        }}
-        .nav-section {{
-            background: var(--bg-card);
-            padding: 1.5rem;
-            border: 1px solid var(--border-light);
-        }}
-        .nav-section h3 {{ margin-bottom: 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
-        .nav-section ul {{ list-style: none; }}
-        .nav-section li {{ margin: 0.4rem 0; font-size: 0.95rem; }}
-        .nav-section a {{ text-decoration: none; }}
-        .nav-section a:hover {{ text-decoration: underline; }}
-        .stats {{ display: flex; gap: 3rem; margin-bottom: 2.5rem; flex-wrap: wrap; padding: 1.5rem 0; border-bottom: 1px solid var(--border-light); }}
-        .stat {{ text-align: center; }}
-        .stat-value {{ font-size: 2.5rem; color: var(--accent); font-weight: normal; font-family: Georgia, serif; }}
-        .stat-label {{ font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
-        dl {{ margin: 1.25rem 0; }}
-        dt {{ color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; text-transform: uppercase; letter-spacing: 0.03em; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
-        dd {{ margin-left: 0; margin-top: 0.25rem; }}
         .back-to-collections {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             font-size: 0.85rem;
@@ -269,7 +170,174 @@ def html_header(title, breadcrumbs=None, base=None):
             text-decoration: none;
         }}
         .back-to-collections a:hover {{
-            color: var(--link);
+            color: var(--accent);
+        }}
+        a {{ color: var(--link); text-decoration: none; }}
+        a:hover {{ color: var(--link-hover); text-decoration: underline; }}
+        h1 {{
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+            font-size: 2.5rem;
+            font-weight: normal;
+            text-align: center;
+        }}
+        .subtitle {{
+            text-align: center;
+            color: var(--text-muted);
+            font-style: italic;
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }}
+        h2 {{
+            color: var(--text);
+            margin: 2.5rem 0 1.5rem;
+            font-size: 1.5rem;
+            font-weight: normal;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border);
+        }}
+        h3 {{ color: var(--text); margin: 1.25rem 0 0.75rem; font-size: 1.1rem; font-weight: 600; }}
+        .breadcrumbs {{
+            margin-bottom: 2rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 1rem;
+            background: var(--bg-card);
+            border-radius: 8px;
+        }}
+        .breadcrumbs a {{ color: var(--accent); }}
+        .card {{
+            background: var(--bg-card);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }}
+        .card:hover {{
+            border-color: var(--accent);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }}
+        .album-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }}
+        .album-card {{
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }}
+        .album-card:hover {{
+            border-color: var(--accent);
+            box-shadow: 0 4px 12px rgba(233,30,99,0.1);
+            transform: translateY(-2px);
+        }}
+        .album-card h3 {{ margin: 0 0 0.5rem; font-size: 1.05rem; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
+        .album-card h3 a {{ text-decoration: none; color: var(--text); }}
+        .album-card h3 a:hover {{ color: var(--accent); }}
+        .album-card .artist {{ color: var(--text-muted); font-size: 0.95rem; font-style: italic; }}
+        .album-card .meta {{ font-size: 0.85rem; color: var(--text-muted); margin-top: 0.75rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
+        .rating {{ color: var(--accent); }}
+        .genre-badge {{
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-weight: 600;
+            color: white;
+            border-radius: 4px;
+        }}
+        .tag {{
+            display: inline-block;
+            background: var(--bg);
+            color: var(--text-muted);
+            padding: 0.25rem 0.75rem;
+            font-size: 0.85rem;
+            margin: 0.25rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }}
+        .tag:hover {{ background: var(--accent); color: white; border-color: var(--accent); }}
+        .track-list {{
+            list-style-position: inside;
+            margin: 0.5rem 0;
+            line-height: 1.6;
+        }}
+        .track-list li {{ margin: 0.25rem 0; }}
+        .nav-sections {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }}
+        .nav-section {{
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }}
+        .nav-section:hover {{
+            border-color: var(--accent);
+        }}
+        .nav-section h3 {{ margin-bottom: 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
+        .nav-section ul {{ list-style: none; }}
+        .nav-section li {{ margin: 0.5rem 0; font-size: 0.95rem; }}
+        .nav-section a {{ text-decoration: none; color: var(--text); }}
+        .nav-section a:hover {{ color: var(--accent); }}
+        .stats {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+            padding: 2rem;
+            background: linear-gradient(135deg, rgba(233,30,99,0.08) 0%, rgba(194,24,91,0.05) 100%);
+            border-radius: 8px;
+            border: 1px solid var(--border-light);
+        }}
+        .stat {{ text-align: center; }}
+        .stat-value {{
+            display: block;
+            font-size: 2.5rem;
+            color: var(--accent);
+            font-weight: normal;
+            font-family: Georgia, serif;
+        }}
+        .stat-label {{
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin-top: 0.5rem;
+        }}
+        dl {{ margin: 1.25rem 0; }}
+        dt {{ color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; text-transform: uppercase; letter-spacing: 0.03em; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
+        dd {{ margin-left: 0; margin-top: 0.25rem; }}
+        footer {{
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            text-align: center;
+        }}
+        @media (max-width: 768px) {{
+            body {{ padding: 1rem; }}
+            h1 {{ font-size: 2rem; }}
+            .stats {{ grid-template-columns: repeat(2, 1fr); }}
+            .album-grid {{ grid-template-columns: 1fr; }}
         }}
     </style>
 </head>
@@ -284,7 +352,7 @@ def html_footer():
     """Generate HTML footer."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     return f'''
-<footer style="margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.8rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-align: center;">
+<footer>
     Generated on {timestamp}
 </footer>
 </body>

@@ -1,157 +1,114 @@
 #!/usr/bin/env python3
 """
-Generate a static website from the albums database.
-Only regenerates if the database has changed since last run.
+Generate a single-page application for the albums database.
+Outputs: index.html + data.json
 """
 
 import os
-import sys
 import json
 import sqlite3
-import hashlib
-from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
-from html import escape
 
-# Configuration
 DB_PATH = "albums.db"
 OUTPUT_DIR = "site"
-STATE_FILE = ".site_state.json"
-
-# Genre colors for badges
-GENRE_COLORS = {
-    'pop': '#e91e63',
-    'rock': '#9c27b0',
-    'jazz': '#3f51b5',
-    'classical': '#2196f3',
-    'electronic': '#00bcd4',
-    'hip-hop': '#ff9800',
-    'country': '#795548',
-    'folk': '#8bc34a',
-    'metal': '#607d8b',
-    'blues': '#5c6bc0',
-    'r&b': '#ec407a',
-    'world': '#26a69a'
-}
-
-
-def get_db_hash(db_path):
-    """Get hash of database file to detect changes."""
-    with open(db_path, 'rb') as f:
-        return hashlib.md5(f.read()).hexdigest()
-
-
-def load_state():
-    """Load previous generation state."""
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, 'r') as f:
-            return json.load(f)
-    return {}
-
-
-def save_state(state):
-    """Save generation state."""
-    with open(STATE_FILE, 'w') as f:
-        json.dump(state, f)
 
 
 def parse_json_field(value):
-    """Parse a JSON field, returning empty list if invalid."""
     if not value:
         return []
     try:
         result = json.loads(value)
-        if isinstance(result, list):
-            return result
-        return [result]
+        return result if isinstance(result, list) else [result]
     except:
         return [value] if value else []
 
 
-def slugify(text):
-    """Convert text to URL-safe slug."""
-    if not text:
-        return "unknown"
-    return "".join(c if c.isalnum() else "-" for c in text.lower()).strip("-")[:50]
-
-
-def get_genre_color(genre):
-    """Get color for genre badge."""
-    if not genre:
-        return '#999'
-    return GENRE_COLORS.get(genre.lower(), '#999')
-
-
-def get_year_from_date(date_str):
-    """Extract year from release date."""
-    if not date_str:
-        return None
-    try:
-        return date_str.split('-')[0]
-    except:
-        return None
-
-
 def get_all_albums(db_path):
-    """Fetch all albums from database."""
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM albums ORDER BY album_name")
     albums = [dict(row) for row in cursor.fetchall()]
     conn.close()
-
-    # Parse JSON fields
+    
     for album in albums:
         album['artists_list'] = parse_json_field(album['artists'])
-        album['track_listing_list'] = parse_json_field(album['track_listing'])
-        album['similar_artists_list'] = parse_json_field(album['similar_artists'])
-        album['awards_list'] = parse_json_field(album['awards'])
-        album['llm_categories_list'] = parse_json_field(album['llm_categories'])
-        album['user_categories_list'] = parse_json_field(album['user_categories'])
-        album['release_year'] = get_year_from_date(album['release_date'])
-
+        album['tracks_list'] = parse_json_field(album.get('tracks'))
+    
     return albums
 
 
-# HTML Templates
-def html_header(title, breadcrumbs=None, base=None):
-    """Generate HTML header."""
-    bc_html = ""
-    if breadcrumbs:
-        bc_parts = ['<a href="index.html">Home</a>']
-        for name, link in breadcrumbs:
-            if link:
-                bc_parts.append(f'<a href="{link}">{escape(name)}</a>')
-            else:
-                bc_parts.append(escape(name))
-        bc_html = f'<nav class="breadcrumbs">{" → ".join(bc_parts)}</nav>'
+def generate_data_json(albums):
+    data = {
+        'albums': [],
+        'stats': {'total': len(albums)},
+        'artists': defaultdict(list),
+        'genres': defaultdict(list),
+        'decades': defaultdict(list),
+    }
+    
+    ratings = [a['rating'] for a in albums if a.get('rating')]
+    data['stats']['avg_rating'] = round(sum(ratings) / len(ratings), 1) if ratings else 0
+    
+    for album in albums:
+        album_data = {
+            'id': album['id'],
+            'name': album['album_name'],
+            'artists': album['artists_list'],
+            'genre': album.get('genre') or '',
+            'year': album.get('release_year') or '',
+            'rating': album.get('rating'),
+            'date_added': album['date_added'][:10] if album.get('date_added') else '',
+            'label': album.get('record_label') or '',
+            'tracks': album['tracks_list'],
+            'description': album.get('description') or '',
+            'notes': album.get('personal_notes') or '',
+        }
+        data['albums'].append(album_data)
+        
+        for artist in album['artists_list']:
+            if album['id'] not in data['artists'][artist]:
+                data['artists'][artist].append(album['id'])
+        
+        if album.get('genre'):
+            if album['id'] not in data['genres'][album['genre']]:
+                data['genres'][album['genre']].append(album['id'])
+        
+        if album.get('release_year'):
+            decade = f"{str(album['release_year'])[:3]}0s"
+            if album['id'] not in data['decades'][decade]:
+                data['decades'][decade].append(album['id'])
+    
+    data['stats']['artist_count'] = len(data['artists'])
+    data['stats']['genre_count'] = len(data['genres'])
+    
+    data['artists'] = dict(data['artists'])
+    data['genres'] = dict(data['genres'])
+    data['decades'] = dict(data['decades'])
+    
+    return data
 
-    base_tag = f'<base href="{base}">' if base else ''
 
-    return f'''<!DOCTYPE html>
+def generate_html():
+    return '''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {base_tag}
-    <title>{escape(title)} - Album Collection</title>
+    <title>Paul's Albums</title>
     <style>
-        :root {{
+        :root {
             --bg: #ffffff;
             --bg-card: #f8f9fa;
             --text: #2c3e50;
             --text-muted: #7f8c8d;
             --accent: #e91e63;
             --accent-hover: #c2185b;
-            --link: #e91e63;
-            --link-hover: #c2185b;
             --border: #e0e0e0;
-            --border-light: #f0f0f0;
-        }}
-        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
             font-family: Georgia, serif;
             background: var(--bg);
             color: var(--text);
@@ -159,572 +116,349 @@ def html_header(title, breadcrumbs=None, base=None):
             padding: 2rem;
             max-width: 1200px;
             margin: 0 auto;
-        }}
-        .back-to-collections {{
+        }
+        .back-link {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             font-size: 0.85rem;
             margin-bottom: 1.5rem;
-        }}
-        .back-to-collections a {{
-            color: var(--text-muted);
-            text-decoration: none;
-        }}
-        .back-to-collections a:hover {{
-            color: var(--accent);
-        }}
-        a {{ color: var(--link); text-decoration: none; }}
-        a:hover {{ color: var(--link-hover); text-decoration: underline; }}
-        h1 {{
-            color: var(--accent);
-            margin-bottom: 0.5rem;
-            font-size: 2.5rem;
-            font-weight: normal;
-            text-align: center;
-        }}
-        .subtitle {{
-            text-align: center;
-            color: var(--text-muted);
-            font-style: italic;
+        }
+        .back-link a { color: var(--text-muted); text-decoration: none; }
+        .back-link a:hover { color: var(--accent); }
+        h1 { color: var(--accent); font-size: 2.5rem; font-weight: normal; text-align: center; margin-bottom: 0.5rem; }
+        .subtitle { text-align: center; color: var(--text-muted); font-style: italic; margin-bottom: 2rem; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
             margin-bottom: 2rem;
-            font-size: 1.1rem;
-        }}
-        h2 {{
-            color: var(--text);
-            margin: 2.5rem 0 1.5rem;
-            font-size: 1.5rem;
-            font-weight: normal;
-            padding-bottom: 0.75rem;
-            border-bottom: 2px solid var(--border);
-        }}
-        h3 {{ color: var(--text); margin: 1.25rem 0 0.75rem; font-size: 1.1rem; font-weight: 600; }}
-        .breadcrumbs {{
-            margin-bottom: 2rem;
-            color: var(--text-muted);
-            font-size: 0.9rem;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            padding: 1rem;
+        }
+        .stat {
             background: var(--bg-card);
-            border-radius: 8px;
-        }}
-        .breadcrumbs a {{ color: var(--accent); }}
-        .card {{
-            background: var(--bg-card);
-            padding: 2rem;
-            margin-bottom: 1.5rem;
+            padding: 1.25rem;
+            text-align: center;
             border: 2px solid var(--border);
             border-radius: 8px;
-            transition: all 0.2s ease;
-        }}
-        .card:hover {{
-            border-color: var(--accent);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }}
-        .album-grid {{
+        }
+        .stat-value { font-size: 2rem; color: var(--accent); }
+        .stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-family: -apple-system, sans-serif; }
+        .nav-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 1rem;
+        }
+        .nav-tab {
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: -apple-system, sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .nav-tab:hover, .nav-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .search-box {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            font-family: Georgia, serif;
+        }
+        .search-box:focus { outline: none; border-color: var(--accent); }
+        .filter-section { margin-bottom: 2rem; }
+        .filter-title { font-size: 1.1rem; margin-bottom: 1rem; color: var(--text); }
+        .filter-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+        .filter-tag {
+            padding: 0.4rem 0.8rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-family: -apple-system, sans-serif;
+            transition: all 0.2s;
+        }
+        .filter-tag:hover { border-color: var(--accent); color: var(--accent); }
+        .filter-tag .count { color: var(--text-muted); margin-left: 0.3rem; }
+        .album-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 1.5rem;
-        }}
-        .album-card {{
+        }
+        .album-card {
             background: var(--bg-card);
             padding: 1.5rem;
             border: 2px solid var(--border);
             border-radius: 8px;
-            transition: all 0.2s ease;
-        }}
-        .album-card:hover {{
-            border-color: var(--accent);
-            box-shadow: 0 4px 12px rgba(233,30,99,0.1);
-            transform: translateY(-2px);
-        }}
-        .album-card h3 {{ margin: 0 0 0.5rem; font-size: 1.05rem; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
-        .album-card h3 a {{ text-decoration: none; color: var(--text); }}
-        .album-card h3 a:hover {{ color: var(--accent); }}
-        .album-card .artist {{ color: var(--text-muted); font-size: 0.95rem; font-style: italic; }}
-        .album-card .meta {{ font-size: 0.85rem; color: var(--text-muted); margin-top: 0.75rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
-        .rating {{ color: var(--accent); }}
-        .genre-badge {{
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .album-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(233,30,99,0.1); }
+        .album-card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.5rem; font-family: -apple-system, sans-serif; }
+        .album-card .artist { color: var(--text-muted); font-style: italic; font-size: 0.95rem; }
+        .album-card .meta { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.75rem; font-family: -apple-system, sans-serif; }
+        .album-card .rating { color: var(--accent); }
+        .genre-badge { 
             display: inline-block;
-            padding: 0.2rem 0.6rem;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            font-weight: 600;
+            background: var(--accent);
             color: white;
+            padding: 0.2rem 0.5rem;
             border-radius: 4px;
-        }}
-        .tag {{
-            display: inline-block;
-            background: var(--bg);
-            color: var(--text-muted);
-            padding: 0.25rem 0.75rem;
-            font-size: 0.85rem;
-            margin: 0.25rem;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            text-decoration: none;
-            transition: all 0.2s ease;
-        }}
-        .tag:hover {{ background: var(--accent); color: white; border-color: var(--accent); }}
-        .track-list {{
-            list-style-position: inside;
-            margin: 0.5rem 0;
-            line-height: 1.6;
-        }}
-        .track-list li {{ margin: 0.25rem 0; }}
-        .nav-sections {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2.5rem;
-        }}
-        .nav-section {{
-            background: var(--bg-card);
-            padding: 1.5rem;
-            border: 2px solid var(--border);
-            border-radius: 8px;
-            transition: all 0.2s ease;
-        }}
-        .nav-section:hover {{
-            border-color: var(--accent);
-        }}
-        .nav-section h3 {{ margin-bottom: 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
-        .nav-section ul {{ list-style: none; }}
-        .nav-section li {{ margin: 0.5rem 0; font-size: 0.95rem; }}
-        .nav-section a {{ text-decoration: none; color: var(--text); }}
-        .nav-section a:hover {{ color: var(--accent); }}
-        .stats {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2.5rem;
-            padding: 2rem;
-            background: linear-gradient(135deg, rgba(233,30,99,0.08) 0%, rgba(194,24,91,0.05) 100%);
-            border-radius: 8px;
-            border: 1px solid var(--border-light);
-        }}
-        .stat {{ text-align: center; }}
-        .stat-value {{
-            display: block;
-            font-size: 2.5rem;
-            color: var(--accent);
-            font-weight: normal;
-            font-family: Georgia, serif;
-        }}
-        .stat-label {{
-            display: block;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 0.7rem;
             margin-top: 0.5rem;
-        }}
-        dl {{ margin: 1.25rem 0; }}
-        dt {{ color: var(--text-muted); font-size: 0.85rem; margin-top: 1rem; text-transform: uppercase; letter-spacing: 0.03em; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
-        dd {{ margin-left: 0; margin-top: 0.25rem; }}
-        footer {{
-            margin-top: 4rem;
-            padding-top: 2rem;
-            border-top: 1px solid var(--border);
+            font-family: -apple-system, sans-serif;
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+        .modal-overlay.active { display: block; }
+        .modal {
+            background: white;
+            max-width: 700px;
+            margin: 0 auto;
+            border-radius: 12px;
+            padding: 2rem;
+            position: relative;
+        }
+        .modal-close {
+            position: absolute;
+            top: 1rem; right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
             color: var(--text-muted);
-            font-size: 0.85rem;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            text-align: center;
-        }}
-        @media (max-width: 768px) {{
-            body {{ padding: 1rem; }}
-            h1 {{ font-size: 2rem; }}
-            .stats {{ grid-template-columns: repeat(2, 1fr); }}
-            .album-grid {{ grid-template-columns: 1fr; }}
-        }}
+        }
+        .modal-close:hover { color: var(--accent); }
+        .modal h2 { color: var(--accent); margin-bottom: 0.5rem; font-weight: normal; }
+        .modal .artist { font-style: italic; color: var(--text-muted); margin-bottom: 1rem; font-size: 1.1rem; }
+        .modal .meta-row { margin: 1rem 0; }
+        .modal .label { font-weight: 600; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; font-family: -apple-system, sans-serif; }
+        .modal .tracks { background: var(--bg-card); padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+        .modal .tracks ol { margin-left: 1.5rem; }
+        .modal .tracks li { margin: 0.3rem 0; }
+        
+        .results-count { color: var(--text-muted); margin-bottom: 1rem; font-family: -apple-system, sans-serif; }
+        footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem; text-align: center; font-family: -apple-system, sans-serif; }
     </style>
 </head>
 <body>
-<div class="back-to-collections"><a href="https://pauls-collections.vercel.app">← All Collections</a></div>
-{bc_html}
-<h1>{escape(title)}</h1>
-'''
-
-
-def html_footer():
-    """Generate HTML footer."""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    return f'''
-<footer>
-    Generated on {timestamp}
-</footer>
+    <div class="back-link"><a href="https://pauls-collections.vercel.app">← All Collections</a></div>
+    <h1>Paul's Albums</h1>
+    <p class="subtitle">A personal music collection</p>
+    
+    <div class="stats" id="stats"></div>
+    
+    <div class="nav-tabs">
+        <button class="nav-tab active" data-view="all">All Albums</button>
+        <button class="nav-tab" data-view="artists">Artists</button>
+        <button class="nav-tab" data-view="genres">Genres</button>
+        <button class="nav-tab" data-view="decades">Decades</button>
+    </div>
+    
+    <input type="text" class="search-box" id="search" placeholder="Search albums, artists, genres...">
+    
+    <div id="filters" class="filter-section" style="display:none;"></div>
+    <div class="results-count" id="results-count"></div>
+    <div class="album-grid" id="albums"></div>
+    
+    <div class="modal-overlay" id="modal">
+        <div class="modal">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <div id="modal-content"></div>
+        </div>
+    </div>
+    
+    <footer>Generated <span id="timestamp"></span></footer>
+    
+    <script>
+    let DATA = null;
+    let currentView = 'all';
+    let currentFilter = null;
+    
+    async function init() {
+        const resp = await fetch('data.json');
+        DATA = await resp.json();
+        document.getElementById('timestamp').textContent = new Date().toLocaleDateString();
+        renderStats();
+        renderAlbums(DATA.albums);
+        setupEventListeners();
+    }
+    
+    function renderStats() {
+        const s = DATA.stats;
+        document.getElementById('stats').innerHTML = `
+            <div class="stat"><div class="stat-value">${s.total}</div><div class="stat-label">Albums</div></div>
+            <div class="stat"><div class="stat-value">${s.artist_count}</div><div class="stat-label">Artists</div></div>
+            <div class="stat"><div class="stat-value">${s.genre_count}</div><div class="stat-label">Genres</div></div>
+            <div class="stat"><div class="stat-value">${s.avg_rating || 'N/A'}</div><div class="stat-label">Avg Rating</div></div>
+        `;
+    }
+    
+    function renderAlbums(albums) {
+        document.getElementById('results-count').textContent = `${albums.length} album${albums.length !== 1 ? 's' : ''}`;
+        document.getElementById('albums').innerHTML = albums.map(a => `
+            <div class="album-card" onclick="showAlbum(${a.id})">
+                <h3>${esc(a.name)}</h3>
+                <div class="artist">${esc(a.artists.join(', '))}</div>
+                <div class="meta">
+                    ${a.year ? `${a.year} • ` : ''}
+                    ${a.rating ? `<span class="rating">${'★'.repeat(a.rating)}${'☆'.repeat(10-a.rating)}</span>` : ''}
+                </div>
+                ${a.genre ? `<span class="genre-badge">${esc(a.genre)}</span>` : ''}
+            </div>
+        `).join('');
+    }
+    
+    function renderFilters(type) {
+        let items = [];
+        if (type === 'artists') items = Object.entries(DATA.artists).map(([k,v]) => [k, v.length]).sort((a,b) => b[1]-a[1]);
+        else if (type === 'genres') items = Object.entries(DATA.genres).map(([k,v]) => [k, v.length]).sort((a,b) => b[1]-a[1]);
+        else if (type === 'decades') items = Object.entries(DATA.decades).map(([k,v]) => [k, v.length]).sort((a,b) => b[0].localeCompare(a[0]));
+        
+        if (items.length === 0) {
+            document.getElementById('filters').style.display = 'none';
+            return;
+        }
+        
+        document.getElementById('filters').style.display = 'block';
+        document.getElementById('filters').innerHTML = `
+            <div class="filter-title">${type.charAt(0).toUpperCase() + type.slice(1)} (${items.length})</div>
+            <div class="filter-tags">
+                ${items.map(([name, count]) => `<span class="filter-tag" data-filter="${esc(name)}">${esc(name)}<span class="count">(${count})</span></span>`).join('')}
+            </div>
+        `;
+    }
+    
+    function filterAlbums(type, value) {
+        let ids = [];
+        if (type === 'artists') ids = DATA.artists[value] || [];
+        else if (type === 'genres') ids = DATA.genres[value] || [];
+        else if (type === 'decades') ids = DATA.decades[value] || [];
+        
+        const albums = DATA.albums.filter(a => ids.includes(a.id));
+        renderAlbums(albums);
+    }
+    
+    function searchAlbums(query) {
+        const q = query.toLowerCase();
+        const albums = DATA.albums.filter(a => 
+            a.name.toLowerCase().includes(q) ||
+            a.artists.some(x => x.toLowerCase().includes(q)) ||
+            (a.genre && a.genre.toLowerCase().includes(q))
+        );
+        renderAlbums(albums);
+    }
+    
+    function showAlbum(id) {
+        const a = DATA.albums.find(x => x.id === id);
+        if (!a) return;
+        
+        document.getElementById('modal-content').innerHTML = `
+            <h2>${esc(a.name)}</h2>
+            <div class="artist">${esc(a.artists.join(', '))}</div>
+            <div class="meta-row">
+                ${a.genre ? `<span class="genre-badge">${esc(a.genre)}</span>` : ''}
+                ${a.year ? ` • ${a.year}` : ''}
+                ${a.rating ? ` • <span class="rating">${'★'.repeat(a.rating)}${'☆'.repeat(10-a.rating)} ${a.rating}/10</span>` : ''}
+            </div>
+            ${a.label ? `<div class="meta-row"><span class="label">Label:</span> ${esc(a.label)}</div>` : ''}
+            ${a.description ? `<div class="meta-row"><span class="label">Description</span><p>${esc(a.description)}</p></div>` : ''}
+            ${a.tracks.length ? `<div class="meta-row"><span class="label">Tracks</span><div class="tracks"><ol>${a.tracks.map(t => `<li>${esc(t)}</li>`).join('')}</ol></div></div>` : ''}
+            ${a.notes ? `<div class="meta-row"><span class="label">Notes:</span> ${esc(a.notes)}</div>` : ''}
+            <div class="meta-row" style="color: var(--text-muted); font-size: 0.85rem;">Added: ${a.date_added}</div>
+        `;
+        document.getElementById('modal').classList.add('active');
+    }
+    
+    function closeModal() {
+        document.getElementById('modal').classList.remove('active');
+    }
+    
+    function setupEventListeners() {
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentView = tab.dataset.view;
+                currentFilter = null;
+                document.getElementById('search').value = '';
+                
+                if (currentView === 'all') {
+                    document.getElementById('filters').style.display = 'none';
+                    renderAlbums(DATA.albums);
+                } else {
+                    renderFilters(currentView);
+                    renderAlbums(DATA.albums);
+                }
+            });
+        });
+        
+        document.getElementById('filters').addEventListener('click', e => {
+            if (e.target.classList.contains('filter-tag')) {
+                currentFilter = e.target.dataset.filter;
+                filterAlbums(currentView, currentFilter);
+            }
+        });
+        
+        document.getElementById('search').addEventListener('input', e => {
+            if (e.target.value) searchAlbums(e.target.value);
+            else if (currentFilter) filterAlbums(currentView, currentFilter);
+            else renderAlbums(DATA.albums);
+        });
+        
+        document.getElementById('modal').addEventListener('click', e => {
+            if (e.target.id === 'modal') closeModal();
+        });
+        
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closeModal();
+        });
+    }
+    
+    function esc(s) { 
+        if (!s) return '';
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); 
+    }
+    
+    init();
+    </script>
 </body>
-</html>
-'''
+</html>'''
 
 
-def generate_album_page(album, output_dir):
-    """Generate individual album page."""
-    slug = f"album-{album['id']}-{slugify(album['album_name'])}"
-    filepath = os.path.join(output_dir, "albums", f"{slug}.html")
-
-    artists = ", ".join(album['artists_list']) if album['artists_list'] else album['artists']
-
-    html = html_header(album['album_name'], [("Albums", "albums.html"), (album['album_name'], None)], base="../")
-
-    html += '<div class="card">'
-    html += f'<p class="artist">by {escape(artists)}</p>'
-
-    # Genre and rating
-    html += '<p style="margin: 1rem 0;">'
-    if album['genre']:
-        genre_color = get_genre_color(album['genre'])
-        html += f'<span class="genre-badge" style="background:{genre_color};">{escape(album["genre"])}</span> '
-    if album['rating']:
-        html += f'<span class="rating">{"★" * album["rating"]}{"☆" * (10 - album["rating"])}</span> {album["rating"]}/10'
-    html += '</p>'
-
-    html += '<dl>'
-
-    if album['release_date']:
-        html += f'<dt>Release Date</dt><dd>{escape(str(album["release_date"]))}</dd>'
-
-    if album['label']:
-        html += f'<dt>Label</dt><dd>{escape(album["label"])}</dd>'
-
-    if album['producer']:
-        html += f'<dt>Producer</dt><dd>{escape(album["producer"])}</dd>'
-
-    if album['total_duration']:
-        html += f'<dt>Duration</dt><dd>{escape(album["total_duration"])}</dd>'
-
-    if album['track_count']:
-        html += f'<dt>Tracks</dt><dd>{album["track_count"]}</dd>'
-
-    html += '</dl>'
-
-    if album['track_listing_list']:
-        html += '<h2>Track Listing</h2><ol class="track-list">'
-        for track in album['track_listing_list']:
-            if track:
-                html += f'<li>{escape(track)}</li>'
-        html += '</ol>'
-
-    if album['album_review']:
-        html += f'<h2>Review</h2><p>{escape(album["album_review"])}</p>'
-
-    if album['musical_style']:
-        html += f'<h2>Musical Style</h2><p>{escape(album["musical_style"])}</p>'
-
-    if album['similar_artists_list']:
-        html += '<h2>Similar Artists</h2><p>'
-        html += ", ".join(escape(a) for a in album['similar_artists_list'])
-        html += '</p>'
-
-    if album['awards_list']:
-        html += '<h2>Awards</h2><ul>'
-        for award in album['awards_list']:
-            html += f'<li>{escape(award)}</li>'
-        html += '</ul>'
-
-    if album['llm_categories_list'] or album['user_categories_list']:
-        html += '<h2>Categories</h2><p>'
-        all_cats = album['llm_categories_list'] + album['user_categories_list']
-        for cat in all_cats:
-            cat_slug = slugify(cat)
-            html += f'<a href="../categories/{cat_slug}.html" class="tag">{escape(cat)}</a>'
-        html += '</p>'
-
-    if album['personal_notes']:
-        html += f'<h2>Personal Notes</h2><p>{escape(album["personal_notes"])}</p>'
-
-    html += f'<p style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted);">Added: {album["date_added"][:10]}</p>'
-
-    html += '</div>'
-    html += html_footer()
-
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    with open(filepath, 'w') as f:
-        f.write(html)
-
-    return slug
-
-
-def generate_list_page(title, items, output_path, breadcrumbs, intro=""):
-    """Generate a list page (artists, genres, years, categories index)."""
-    html = html_header(title, breadcrumbs)
-
-    if intro:
-        html += f'<p style="margin-bottom: 1.5rem; color: var(--text-muted);">{intro}</p>'
-
-    html += '<ul style="list-style: none; columns: 2; column-gap: 2rem;">'
-    for name, link, count in sorted(items, key=lambda x: x[0].lower()):
-        html += f'<li style="margin: 0.5rem 0;"><a href="{link}">{escape(name)}</a> <span style="color: var(--text-muted);">({count})</span></li>'
-    html += '</ul>'
-
-    html += html_footer()
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, 'w') as f:
-        f.write(html)
-
-
-def generate_group_page(title, albums, output_path, breadcrumbs, base=None):
-    """Generate a page showing a group of albums."""
-    html = html_header(title, breadcrumbs, base=base)
-
-    html += f'<p style="margin-bottom: 1.5rem; color: var(--text-muted);">{len(albums)} album(s)</p>'
-
-    html += '<div class="album-grid">'
-    for album in sorted(albums, key=lambda a: a['album_name'].lower()):
-        slug = f"album-{album['id']}-{slugify(album['album_name'])}"
-        artists = ", ".join(album['artists_list']) if album['artists_list'] else album['artists']
-
-        html += f'''<div class="album-card">
-            <h3><a href="../albums/{slug}.html">{escape(album['album_name'])}</a></h3>
-            <p class="artist">{escape(artists)}</p>
-            <p class="meta">'''
-
-        if album['genre']:
-            genre_color = get_genre_color(album['genre'])
-            html += f'<span class="genre-badge" style="background:{genre_color};">{escape(album["genre"])}</span> '
-
-        if album['rating']:
-            html += f'<span class="rating">{"★" * album["rating"]}</span>'
-
-        html += '</p></div>'
-    html += '</div>'
-
-    html += html_footer()
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, 'w') as f:
-        f.write(html)
-
-
-def generate_albums_index(albums, output_dir):
-    """Generate all albums index page."""
-    html = html_header("All Albums", [("All Albums", None)])
-
-    rated_albums = [a for a in albums if a['rating']]
-    avg_rating = sum(a['rating'] for a in rated_albums) / len(rated_albums) if rated_albums else 0
-
-    html += f'''<div class="stats">
-        <div class="stat"><div class="stat-value">{len(albums)}</div><div class="stat-label">Total Albums</div></div>
-        <div class="stat"><div class="stat-value">{avg_rating:.1f}</div><div class="stat-label">Avg Rating</div></div>
-    </div>'''
-
-    html += '<div class="album-grid">'
-    for album in sorted(albums, key=lambda a: a['album_name'].lower()):
-        slug = f"album-{album['id']}-{slugify(album['album_name'])}"
-        artists = ", ".join(album['artists_list']) if album['artists_list'] else album['artists']
-
-        html += f'''<div class="album-card">
-            <h3><a href="albums/{slug}.html">{escape(album['album_name'])}</a></h3>
-            <p class="artist">{escape(artists)}</p>
-            <p class="meta">'''
-
-        if album['genre']:
-            genre_color = get_genre_color(album['genre'])
-            html += f'<span class="genre-badge" style="background:{genre_color};">{escape(album["genre"])}</span> '
-
-        if album['rating']:
-            html += f'<span class="rating">{"★" * album["rating"]}</span>'
-
-        html += '</p></div>'
-    html += '</div>'
-
-    html += html_footer()
-
-    with open(os.path.join(output_dir, "albums.html"), 'w') as f:
-        f.write(html)
-
-
-def generate_index(albums, artists_count, genres_count, years_count, categories_count, output_dir):
-    """Generate main index page."""
-    html = html_header("Album Collection")
-
-    rated_albums = [a for a in albums if a['rating']]
-    avg_rating = sum(a['rating'] for a in rated_albums) / len(rated_albums) if rated_albums else 0
-
-    # Count unique artists
-    all_artists = set()
-    for album in albums:
-        all_artists.update(album['artists_list'])
-
-    # Find most common genre
-    genre_counts = defaultdict(int)
-    for album in albums:
-        if album['genre']:
-            genre_counts[album['genre']] += 1
-    most_common_genre = max(genre_counts.items(), key=lambda x: x[1])[0] if genre_counts else "N/A"
-
-    html += f'''<div class="stats">
-        <div class="stat"><div class="stat-value">{len(albums)}</div><div class="stat-label">Total Albums</div></div>
-        <div class="stat"><div class="stat-value">{len(all_artists)}</div><div class="stat-label">Total Artists</div></div>
-        <div class="stat"><div class="stat-value">{avg_rating:.1f}</div><div class="stat-label">Avg Rating</div></div>
-        <div class="stat"><div class="stat-value">{most_common_genre}</div><div class="stat-label">Top Genre</div></div>
-    </div>'''
-
-    html += '<div class="nav-sections">'
-
-    html += f'''<div class="nav-section">
-        <h3>🎵 Browse</h3>
-        <ul>
-            <li><a href="albums.html">All Albums ({len(albums)})</a></li>
-            <li><a href="artists.html">By Artist ({artists_count})</a></li>
-            <li><a href="genres.html">By Genre ({genres_count})</a></li>
-            <li><a href="years.html">By Year ({years_count})</a></li>
-            <li><a href="categories.html">By Category ({categories_count})</a></li>
-        </ul>
-    </div>'''
-
-    # Recently added
-    recent = sorted(albums, key=lambda a: a['date_added'], reverse=True)[:5]
-    html += '<div class="nav-section"><h3>🕐 Recently Added</h3><ul>'
-    for album in recent:
-        slug = f"album-{album['id']}-{slugify(album['album_name'])}"
-        html += f'<li><a href="albums/{slug}.html">{escape(album["album_name"])}</a></li>'
-    html += '</ul></div>'
-
-    # Top rated
-    top_rated = sorted([a for a in albums if a['rating']], key=lambda a: a['rating'], reverse=True)[:5]
-    if top_rated:
-        html += '<div class="nav-section"><h3>⭐ Top Rated</h3><ul>'
-        for album in top_rated:
-            slug = f"album-{album['id']}-{slugify(album['album_name'])}"
-            html += f'<li><a href="albums/{slug}.html">{escape(album["album_name"])}</a> ({album["rating"]}/10)</li>'
-        html += '</ul></div>'
-
-    html += '</div>'
-    html += html_footer()
-
-    with open(os.path.join(output_dir, "index.html"), 'w') as f:
-        f.write(html)
-
-
-def generate_site(force=False):
-    """Generate the complete static site."""
-    # Check if regeneration needed
-    if not os.path.exists(DB_PATH):
-        print(f"Error: Database not found at {DB_PATH}")
-        return False
-
-    current_hash = get_db_hash(DB_PATH)
-    state = load_state()
-
-    if not force and state.get('db_hash') == current_hash:
-        print("Database unchanged. Use --force to regenerate anyway.")
-        return True
-
-    print("Generating site...")
-
-    # Create output directory
+def generate_site():
+    print("Generating albums SPA...")
+    
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    os.makedirs(os.path.join(OUTPUT_DIR, "albums"), exist_ok=True)
-    os.makedirs(os.path.join(OUTPUT_DIR, "artists"), exist_ok=True)
-    os.makedirs(os.path.join(OUTPUT_DIR, "genres"), exist_ok=True)
-    os.makedirs(os.path.join(OUTPUT_DIR, "years"), exist_ok=True)
-    os.makedirs(os.path.join(OUTPUT_DIR, "categories"), exist_ok=True)
-
-    # Get all albums
+    
     albums = get_all_albums(DB_PATH)
     print(f"Found {len(albums)} albums")
-
-    # Generate individual album pages
-    for album in albums:
-        generate_album_page(album, OUTPUT_DIR)
-    print(f"Generated {len(albums)} album pages")
-
-    # Build indexes
-    artists_index = defaultdict(list)
-    genres_index = defaultdict(list)
-    years_index = defaultdict(list)
-    categories_index = defaultdict(list)
-
-    for album in albums:
-        for artist in album['artists_list']:
-            if artist:
-                artists_index[artist].append(album)
-        if album['genre']:
-            genres_index[album['genre']].append(album)
-        if album['release_year']:
-            years_index[album['release_year']].append(album)
-        for cat in album['llm_categories_list'] + album['user_categories_list']:
-            if cat:
-                categories_index[cat].append(album)
-
-    # Generate artist pages
-    artist_items = []
-    for artist, artist_albums in artists_index.items():
-        slug = slugify(artist)
-        filepath = os.path.join(OUTPUT_DIR, "artists", f"{slug}.html")
-        generate_group_page(artist, artist_albums, filepath, [("Artists", "artists.html"), (artist, None)], base="../")
-        artist_items.append((artist, f"artists/{slug}.html", len(artist_albums)))
-
-    generate_list_page("Artists", artist_items,
-                      os.path.join(OUTPUT_DIR, "artists.html"),
-                      [("Artists", None)],
-                      f"{len(artists_index)} artists in your collection")
-    print(f"Generated {len(artists_index)} artist pages")
-
-    # Generate genre pages
-    genre_items = []
-    for genre, genre_albums in genres_index.items():
-        slug = slugify(genre)
-        filepath = os.path.join(OUTPUT_DIR, "genres", f"{slug}.html")
-        generate_group_page(genre, genre_albums, filepath, [("Genres", "genres.html"), (genre, None)], base="../")
-        genre_items.append((genre, f"genres/{slug}.html", len(genre_albums)))
-
-    generate_list_page("Genres", genre_items,
-                      os.path.join(OUTPUT_DIR, "genres.html"),
-                      [("Genres", None)],
-                      f"{len(genres_index)} genres in your collection")
-    print(f"Generated {len(genres_index)} genre pages")
-
-    # Generate year pages
-    year_items = []
-    for year, year_albums in years_index.items():
-        slug = year
-        filepath = os.path.join(OUTPUT_DIR, "years", f"{slug}.html")
-        generate_group_page(year, year_albums, filepath, [("Years", "years.html"), (year, None)], base="../")
-        year_items.append((year, f"years/{slug}.html", len(year_albums)))
-
-    # Sort years in reverse chronological order
-    year_items_sorted = sorted(year_items, key=lambda x: x[0], reverse=True)
-    generate_list_page("Years", year_items_sorted,
-                      os.path.join(OUTPUT_DIR, "years.html"),
-                      [("Years", None)],
-                      f"{len(years_index)} years represented")
-    print(f"Generated {len(years_index)} year pages")
-
-    # Generate category pages
-    category_items = []
-    for cat, cat_albums in categories_index.items():
-        slug = slugify(cat)
-        filepath = os.path.join(OUTPUT_DIR, "categories", f"{slug}.html")
-        generate_group_page(cat, cat_albums, filepath, [("Categories", "categories.html"), (cat, None)], base="../")
-        category_items.append((cat, f"categories/{slug}.html", len(cat_albums)))
-
-    generate_list_page("Categories", category_items,
-                      os.path.join(OUTPUT_DIR, "categories.html"),
-                      [("Categories", None)],
-                      f"{len(categories_index)} categories")
-    print(f"Generated {len(categories_index)} category pages")
-
-    # Generate all albums page
-    generate_albums_index(albums, OUTPUT_DIR)
-
-    # Generate main index
-    generate_index(albums, len(artists_index), len(genres_index), len(years_index), len(categories_index), OUTPUT_DIR)
-
-    # Save state
-    save_state({'db_hash': current_hash, 'generated_at': datetime.now().isoformat()})
-
-    print(f"\n✓ Site generated in '{OUTPUT_DIR}/'")
-    print(f"  Open {OUTPUT_DIR}/index.html to view")
-
-    return True
+    
+    data = generate_data_json(albums)
+    with open(os.path.join(OUTPUT_DIR, 'data.json'), 'w') as f:
+        json.dump(data, f)
+    print("Generated data.json")
+    
+    with open(os.path.join(OUTPUT_DIR, 'index.html'), 'w') as f:
+        f.write(generate_html())
+    print("Generated index.html")
+    
+    print(f"\n✓ Site generated in '{OUTPUT_DIR}/' (2 files)")
 
 
 if __name__ == "__main__":
-    force = "--force" in sys.argv
-    success = generate_site(force=force)
-    sys.exit(0 if success else 1)
+    generate_site()
